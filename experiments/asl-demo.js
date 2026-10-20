@@ -76,27 +76,34 @@ export const LIVE_TEXT = Object.freeze({
   finger: (f) => `Move your ${f} finger where the gold one goes.`,
   digits: (ds) => `Move your ${digitsPhrase(ds)} where the gold ones go.`,
 });
+/* The same with a glove: no gold lines (Indranil, 20 Oct: "the mismatch between skeleton and glove provides enough
+ * corrective feedback"), so the words say what to match. */
+export const GLOVE_TEXT = Object.freeze({
+  ...LIVE_TEXT,
+  neutral: "Put your hand inside the glove.",
+  orientation: "Turn your hand to match the glove.",
+  thumb: "Move your thumb to match the glove.",
+  finger: (f) => `Move your ${f} finger to match the glove.`,
+  digits: (ds) => `Move your ${digitsPhrase(ds)} to match the glove.`,
+});
 /* ...prefixed, once it has settled (coach.js LOOKS_SETTLE_MS), with the letter the hand looks like instead. */
 export const looksText = (L) => `Looks like ${L}. `;
 /* `noun`: what is drawn for the hand to fit, "outline" or "glove". */
 export function liveText(look, noun = "outline") {
-  const t = liveLine(look);
-  return noun === "outline" ? t : t.replace("the outline", `the ${noun}`);
-}
-function liveLine(look) {
-  if (!look) return LIVE_TEXT.neutral;
-  if (look.state === "match") return LIVE_TEXT.match;
-  if (look.state === "accepted") return LIVE_TEXT.accepted;
+  const T = noun === "glove" ? GLOVE_TEXT : LIVE_TEXT;
+  if (!look) return T.neutral;
+  if (look.state === "match") return T.match;
+  if (look.state === "accepted") return T.accepted;
   const named = look.looksLike ? looksText(look.looksLike) : "";
   // a hand that is another letter, with no one part to change: the shape is what to fix, not where the hand is
-  if (look.state !== "fix" || !look.blocks.length) return named ? named + LIVE_TEXT.reshape : LIVE_TEXT.neutral;
+  if (look.state !== "fix" || !look.blocks.length) return named ? named + T.reshape : T.neutral;
   const b = look.blocks[0];
-  if (b === "orientation") return named + LIVE_TEXT.orientation;
-  if (b === "spread") return named + LIVE_TEXT.spread;
+  if (b === "orientation") return named + T.orientation;
+  if (b === "spread") return named + T.spread;
   const digits = look.blocks.filter((x) => x !== "orientation" && x !== "spread");
-  if (digits.length > 1) return named + LIVE_TEXT.digits(digits);
-  if (b === "thumb") return named + LIVE_TEXT.thumb;
-  return named + LIVE_TEXT.finger(b);
+  if (digits.length > 1) return named + T.digits(digits);
+  if (b === "thumb") return named + T.thumb;
+  return named + T.finger(b);
 }
 /* "index finger and thumb", "middle, ring and pinky fingers": every golden finger, by name. */
 export function digitsPhrase(digits) {
@@ -137,8 +144,9 @@ const FOLLOW = params.get("follow") === "1";
 // the learner's own tracked skeleton, to compare with the outline (Indranil, 19 Oct: "retain the hand skeleton");
 // ?dots=0 hides it
 const DOTS = params.get("dots") !== "0";
-// the room dimmed around the hand (JT, 19 Oct); ?focus=0 starts without
-const FOCUS_ON = params.get("focus") !== "0";
+// the room dimmed around the hand (JT, 19 Oct): with the outline; not with a glove (Indranil, 20 Oct: "the glove and
+// skeleton are prominent enough"); ?focus=1 / 0 either way, or F
+const FOCUS_ON = params.get("focus") === "1" || (params.get("focus") !== "0" && LOOK_STYLE !== "glove");
 // a meter per finger (JT's "symbolic" feedback, thinking it through, 19 Oct): off unless ?meters=1 (or M)
 const METERS_ON = params.get("meters") === "1";
 // what the tutor read on each hold (the CHI 2026 paper's decomposition): off unless ?notes=1 (or T)
@@ -197,7 +205,7 @@ export default {
       : "The letter's picture is on the right, and the same picture is drawn in the camera view, sized to your hand: put your hand into it, turned and shaped to fit."}</p>
     <ul class="demo-legend-list">
       <li><span class="demo-chip demo-chip-neutral"></span> Fit your hand into the ${LOOK_STYLE === "glove" ? "glove" : "picture"}.</li>
-      <li><span class="demo-chip demo-chip-fix"></span> A gold finger shows which finger to move, and where to.</li>
+      ${LOOK_STYLE === "glove" ? "" : `<li><span class="demo-chip demo-chip-fix"></span> A gold finger shows which finger to move, and where to.</li>`}
       <li><span class="demo-chip demo-chip-match"></span> Green: that's the letter. Hold still until the circle fills.</li>
     </ul>
     <p>If your hand makes a different letter, it says which one, and what to change.</p>
@@ -241,7 +249,7 @@ export default {
       <div class="demo-legend" id="demo-legend">
         <span><span class="demo-chip demo-chip-neutral"></span>the shape to make</span>
         <span><span class="demo-chip demo-chip-you"></span>your hand</span>
-        <span><span class="demo-chip demo-chip-fix"></span>change this</span>
+        ${LOOK_STYLE === "glove" ? "" : `<span><span class="demo-chip demo-chip-fix"></span>change this</span>`}
         <span><span class="demo-chip demo-chip-match"></span>that's it</span>
         <span class="demo-keys"><span class="demo-key"><kbd>G</kbd> ${shapeWord()} <span id="demo-ghost-state">on</span></span>
           <span class="demo-key"><kbd>F</kbd> dimming <span id="demo-focus-state">on</span></span>
@@ -495,7 +503,7 @@ async function loadEverything() {
   if (LOOK_STYLE !== "hand") await session.picture.load(session.letters, pictureUrl);
   if (LOOK_STYLE === "glove") {
     const gloves = await get(GLOVES_PATH, "gloves");
-    session.glove = createGloveGhost({ gloves: gloves.letters, templates: ghosts.letters, hand: HAND });
+    session.glove = createGloveGhost({ gloves: gloves.letters, hand: HAND });
     await session.glove.load(session.letters);
   }
   session.motionGuide = createMotionGuide({ hand: HAND });

@@ -2,14 +2,15 @@
  * the idea of thinking that it's a glove that you have to put your hand into"; for Thursday's demo L X G, right hand).
  * Drawing only: it grades nothing, and the hold, the grader and the words are exactly as with the outline.
  *
- * WHERE IT GOES. As the outline (picture-ghost.js): in its fixed spot (Indranil and JT, 20 Oct: a glove that moves would
- * be confusing; "if the size is roughly like their hand, most ideal"), never turning, its size easing to the learner's
- * palm -- the glove's wrist -> middle knuckle (assets/gloves/gloves.json) as long as theirs.
+ * WHERE IT GOES. In a fixed spot (Indranil and JT, 20 Oct: a glove that moves would be confusing; "if the size is
+ * roughly like their hand, most ideal"), a little further right than the outline's (GLOVE_SPOT; Indranil: "being too
+ * centered on the screen is uncomfortable on the elbows"), never turning, its size easing to the learner's palm (as
+ * picture-ghost.js): the glove's wrist -> middle knuckle (assets/gloves/gloves.json) as long as theirs.
  *
  * WHAT IT SAYS. Translucent, so the learner's own hand and skeleton show inside it (Indranil: "like the skeleton is
- * within a glove"), with a crisp rim so its edge is clear; mint when the grader would accept the hand as it is now
- * (the coach's `look`, the same grader as the hold); its rim pulsing amber when the hand is turned wrong; and the golden
- * finger for the finger to change, as with the outline.
+ * within a glove"), and mint when the grader would accept the hand as it is now (the coach's `look`, the same grader as
+ * the hold). Nothing else (Indranil, 20 Oct, after trying it: no gold lines, "the mismatch between skeleton and glove
+ * provides enough corrective feedback"; no white line round the glove): the words under the letter say what to move.
  *
  * HOW IT MOVES (the owner, 20 Oct: "clean animations ... a cute bounce when the sign is completed ... make sure it
  * isn't distracting"). Nothing moves while the learner is trying. A new letter's glove pops in (POP, 0.3 s); when the
@@ -17,11 +18,19 @@
  * hand about its wrist and settling within JELLO.ms, while a mint ring and a few sparkles leave its edge and fade
  * (SPARKS). All of it is over inside the second the accepted letter stays up (flow.js END_DWELL_MS). */
 
-import { anchorOf, spotOf, transformOf, applyTransform, PALM_LENGTH, PALM_AT, SIZE_EASE, dilate, fingerHints, drawGoldFinger } from "./picture-ghost.js";
+import { anchorOf, transformOf, applyTransform, PALM_LENGTH, PALM_AT, SIZE_EASE } from "./picture-ghost.js";
 
-export const GLOVE = Object.freeze({ body: 0.5, rim: 0.95, rimPx: 6, tintEase: 0.22 });
+export const GLOVE = Object.freeze({ body: 0.6, tintEase: 0.22 });
 export const TINT = Object.freeze({ match: "#34d399" });
-const RIM = Object.freeze({ neutral: "#f5f3ff", match: "#a7f3d0", turn: "#fbbf24" });
+const MINT = "#a7f3d0";
+/* The glove's palm on screen, as a fraction of the camera view (x from the left, y from the top), for a right hand;
+ * mirrored for a left one. The outline's is x 0.66 (picture-ghost.js SPOT). */
+export const GLOVE_SPOT = Object.freeze({ x: 0.74, y: 0.55 });
+/** The spot on the canvas (shown mirrored, so the screen's x is flipped), for a canvas W x H and a hand. */
+export function gloveSpot(W, H, hand = "right") {
+  const sx = hand === "left" ? 1 - GLOVE_SPOT.x : GLOVE_SPOT.x;
+  return { x: (1 - sx) * W, y: GLOVE_SPOT.y * H };
+}
 export const POP = Object.freeze({ ms: 320, from: 0.88 });
 export const BOING = Object.freeze({ ms: 240, amp: 0.07 });
 export const JELLO = Object.freeze({ ms: 800, amp: 0.15, periodMs: 270, decayMs: 210 });
@@ -90,44 +99,14 @@ function tinted(img, flip, color) {
   return c;
 }
 
-/* The glove's rim: its own edge, GLOVE.rimPx wide on the inside, in one colour, with a soft dark halo baked in so it
- * reads on a pale wall. */
-function rimOf(body, color) {
-  const w = body.width, h = body.height, n = w * h;
-  const d = body.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, w, h).data;
-  const outside = new Uint8Array(n);
-  for (let i = 0; i < n; i++) outside[i] = d[4 * i + 3] < 128 ? 1 : 0;
-  const near = dilate(outside, w, h, GLOVE.rimPx);
-  const m = document.createElement("canvas");
-  m.width = w; m.height = h;
-  const mg = m.getContext("2d");
-  const out = mg.createImageData(w, h);
-  for (let i = 0; i < n; i++) if (near[i] && d[4 * i + 3] > 0) out.data[4 * i + 3] = d[4 * i + 3];
-  mg.putImageData(out, 0, 0);
-  mg.globalCompositeOperation = "source-in";
-  mg.fillStyle = color;
-  mg.fillRect(0, 0, w, h);
-  const pad = 10, c = document.createElement("canvas");
-  c.width = w + 2 * pad; c.height = h + 2 * pad;
-  const g = c.getContext("2d");
-  g.shadowColor = "rgba(15, 23, 42, 0.7)";
-  g.shadowBlur = 8;
-  g.drawImage(m, pad, pad);
-  g.shadowBlur = 0;
-  g.drawImage(m, pad, pad);
-  c.pad = pad;
-  return c;
-}
-
 /**
  * One per session, the outline's interface: `load(letters)`, `has(letter)`, `reset()` at each trial, `draw` every
  * frame after the canvas was cleared, and `celebrate(tMs)` when the hold is accepted.
- * @param {{gloves: object, templates?: object, hand?: "right"|"left"}} o
- *   gloves: assets/gloves/gloves.json letters; templates: tutor/ghost-hands.json letters, for the golden finger
+ * @param {{gloves: object, hand?: "right"|"left"}} o   gloves: assets/gloves/gloves.json letters
  */
-export function createGloveGhost({ gloves, templates = null, hand = "right" }) {
-  const art = {};   // letter -> { neutral, match, rims: { neutral, match, turn }, pp, len }
-  let cur = null, tint = { g: 0, a: 0 }, shownAt = null, celebratedAt = null;
+export function createGloveGhost({ gloves, hand = "right" }) {
+  const art = {};   // letter -> { neutral, match, pp, len }
+  let cur = null, tint = 0, shownAt = null, celebratedAt = null;
   return {
     async load(letters) {
       await Promise.all([...new Set(letters)].filter((L) => gloves[L]).map(async (L) => {
@@ -138,31 +117,26 @@ export function createGloveGhost({ gloves, templates = null, hand = "right" }) {
         const flip = gloveFlipped(hand);
         const neutral = tinted(img, flip, null), match = tinted(img, flip, TINT.match);
         const pp = glovePoints(gloves[L], hand, img.naturalWidth, img.naturalHeight);
-        art[L] = { neutral, match, pp, len: Math.hypot(pp.M[0] - pp.W[0], pp.M[1] - pp.W[1]),
-          rims: { neutral: rimOf(neutral, RIM.neutral), match: rimOf(neutral, RIM.match), turn: rimOf(neutral, RIM.turn) } };
+        art[L] = { neutral, match, pp, len: Math.hypot(pp.M[0] - pp.W[0], pp.M[1] - pp.W[1]) };
       }));
     },
     has: (L) => !!art[L],
-    reset() { cur = null; tint = { g: 0, a: 0 }; shownAt = null; celebratedAt = null; },
+    reset() { cur = null; tint = 0; shownAt = null; celebratedAt = null; },
     celebrate(tMs) { celebratedAt = tMs; },
-    /* `strength` (0..1): how much of the guidance to show (the demo's ?fade=1); the glove and the golden finger are
-     * drawn that much fainter, and not at all at 0. */
+    /* `strength` (0..1): how much of the guidance to show (the demo's ?fade=1); the glove is drawn that much fainter,
+     * and not at all at 0. */
     draw(ctx, canvas, landmarks, letter, look = null, tMs = 0, strength = 1) {
       const a = art[letter];
       if (!a || !(strength > 0)) return;
       const W = canvas.width, H = canvas.height;
       const green = look?.state === "match" || look?.state === "accepted";
-      const turned = !green && look?.state === "fix" && (look.blocks ?? []).includes("orientation");
       const hand0 = anchorOf(landmarks, W, H);
       // in its spot; only the size eases toward the learner's hand
-      const spot = spotOf(W, H, hand);
+      const spot = gloveSpot(W, H, hand);
       const kWant = ((hand0?.s ?? (cur ? null : H * 0.2)) * PALM_LENGTH) / a.len;
       cur = { x: spot.x, y: spot.y, th: 0, k: cur ? (hand0 ? cur.k + SIZE_EASE * (kWant - cur.k) : cur.k) : kWant };
-      const s = hand0?.s ?? H * 0.2;
-      tint = { g: tint.g + GLOVE.tintEase * ((green ? 1 : 0) - tint.g), a: tint.a + GLOVE.tintEase * ((turned ? 1 : 0) - tint.a) };
+      tint += GLOVE.tintEase * ((green ? 1 : 0) - tint);
       shownAt ??= tMs;
-
-      const gold = fingerHints(ctx, { landmarks, W, H, letter, look, templates, hand, s, strength });
 
       // where it is, then the pop as it appears (about the palm) and the wobble once accepted (about the wrist,
       // squashing along the hand)
@@ -179,7 +153,7 @@ export function createGloveGhost({ gloves, templates = null, hand = "right" }) {
         const u = since / SPARKS.ms, e = easeOut(u), R = a.len * cur.k;
         ctx.save();
         ctx.globalAlpha = 0.6 * (1 - u) * strength;
-        ctx.strokeStyle = RIM.match;
+        ctx.strokeStyle = MINT;
         ctx.lineWidth = Math.max(1, 0.09 * R * (1 - u));
         ctx.beginPath(); ctx.arc(palm[0], palm[1], R * (0.9 + 0.75 * e), 0, 2 * Math.PI); ctx.stroke();
         for (const p of sparks()) {
@@ -201,23 +175,14 @@ export function createGloveGhost({ gloves, templates = null, hand = "right" }) {
       ctx.translate(wrist[0], wrist[1]); ctx.rotate(phi); ctx.scale(wob.along, wob.across); ctx.rotate(-phi); ctx.translate(-wrist[0], -wrist[1]);
       ctx.transform(t.a, t.b, t.c, t.d, t.e, t.f);
       ctx.imageSmoothingQuality = "high";
-      // the body is lavender or mint; turned wrong, only the rim goes amber (and pulses), as the outline's lines did
-      const g = clamp01(tint.g), am = clamp01(tint.a) * (1 - g), base = 1 - g - am;
-      const pulse = 0.65 + 0.35 * Math.sin(tMs / 160);
+      // lavender, or mint as the hand comes right
+      const g = clamp01(tint);
       for (const [img, w] of [[a.neutral, 1 - g], [a.match, g]]) {
         if (w < 0.01) continue;
         ctx.globalAlpha = GLOVE.body * w * strength * fadeIn;
         ctx.drawImage(img, 0, 0);
       }
-      for (const [img, w] of [[a.rims.neutral, base], [a.rims.match, g], [a.rims.turn, am * pulse]]) {
-        if (w < 0.01) continue;
-        ctx.globalAlpha = GLOVE.rim * w * strength * fadeIn;
-        ctx.drawImage(img, -img.pad, -img.pad);
-      }
       ctx.restore();
-
-      if (gold) drawGoldFinger(ctx, gold, tMs, s, strength);
-
     },
   };
 }
