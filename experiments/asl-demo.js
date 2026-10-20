@@ -384,21 +384,41 @@ export function resultsTable(rows) {
     </table>`;
 }
 
-/* Under the camera check: "My camera shows me flipped", which reloads with ?srcmirror=1 (js/core/tracker.js) toggled. */
+/* Under the camera check, when it sees the other hand: a camera that sends a mirror image (the owner's Mac sometimes
+ * does: the picture looks turned the wrong way round and a right hand reads as a left one) is fixed by ?srcmirror=1
+ * (js/core/tracker.js). The button reloads with it toggled, and this browser remembers it (FLIP_KEY), so it is asked
+ * once: the owner, 20 Oct, "it inverted my camera ... said I was using my left hand when I had my right up", having
+ * missed the small link this used to be. */
+export const FLIP_KEY = "asl-demo-srcmirror";
+(() => {
+  try {
+    const q = new URLSearchParams(location.search);
+    if (!q.has("srcmirror") && localStorage.getItem(FLIP_KEY) === "1") { q.set("srcmirror", "1"); location.replace(`?${q}`); }
+  } catch { /* no page or no storage (tests, a private window): the button still works for this visit */ }
+})();
 let flipOffer = null;
 function showFlipOffer(on) {
   if (typeof document === "undefined") return;
   if (!flipOffer) {
-    const status = document.querySelector("#position-status");
-    if (!status) return;
-    flipOffer = document.createElement("p");
+    // ABOVE the camera picture: under it (where the status line is) it was below the bottom of the screen
+    const slot = document.querySelector("#position-stage-slot");
+    if (!slot) return;
+    flipOffer = document.createElement("div");
     flipOffer.className = "demo-flip";
     const q = new URLSearchParams(location.search);
     const mirrored = q.get("srcmirror") === "1";
     if (mirrored) q.delete("srcmirror"); else q.set("srcmirror", "1");
-    flipOffer.innerHTML = `Using your ${HAND} hand already? Your camera may flip the picture:
-      <a href="?${q.toString()}">${mirrored ? "undo the flip" : "fix it"}</a>.`;
-    status.after(flipOffer);
+    const other = HAND === "right" ? "left" : "right";
+    flipOffer.innerHTML = mirrored
+      ? `<span>We see a ${other} hand. If you are holding up your ${HAND} hand, your camera may not need the flip:</span>
+         <button type="button" class="demo-flip-btn">Undo the camera flip</button>`
+      : `<span>We see a ${other} hand. If you are holding up your ${HAND} hand, your camera is sending a mirror image:</span>
+         <button type="button" class="demo-flip-btn">This is my ${HAND} hand: flip the camera</button>`;
+    flipOffer.querySelector("button").onclick = () => {
+      try { if (mirrored) localStorage.removeItem(FLIP_KEY); else localStorage.setItem(FLIP_KEY, "1"); } catch { /* this visit only */ }
+      location.href = `?${q}`;
+    };
+    slot.before(flipOffer);
   }
   flipOffer.hidden = !on;
 }

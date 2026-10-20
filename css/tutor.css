@@ -500,7 +500,12 @@
 html.asl-demo #done-demo { display: none !important; }
 .demo-again { display: inline-block; padding: 0.55rem 1.2rem; border-radius: 10px; background: #1f2937; color: #fff; font-weight: 700; text-decoration: none; }
 .demo-chip-you { background: rgba(56, 189, 248, 0.95); border-color: #0369a1; }
-.demo-flip { font-size: 0.85rem; color: var(--muted, #555); margin-top: 0.3rem; }
+.demo-flip { font-size: 0.9rem; color: var(--text, #222); margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; background: #fff7e6; border: 1px solid #f5d9a6; display: flex; flex-direction: column; align-items: center; gap: 0.4rem; text-align: center; }
+.demo-flip[hidden] { display: none; }
+.demo-flip-btn { font: inherit; font-size: 1rem; font-weight: 700; padding: 10px 18px; border-radius: 12px; cursor: pointer;
+  background: var(--panel, #fff); color: var(--text, #222); border: 2px solid var(--line, #ddd); border-bottom-width: 4px; }
+.demo-flip-btn:hover { filter: brightness(0.97); }
+.demo-flip-btn:focus-visible { outline: 3px solid var(--accent, #f59e0b); outline-offset: 2px; }
 
 /* ---- the demo, 2 (19 Oct): the room dimmed round the hand, a meter per finger, the tutor's notes ---------------- */
 /* focus.js: the dimmer canvas sits between the camera picture and the outline (inside the mirrored box, so the
