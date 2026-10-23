@@ -29,7 +29,8 @@
  * Keys while practising: G outline, F dimming, M meters, T the tutor's notes (for a teacher: it shows the grader's
  * numbers, so the learner's screen never mentions it), N or -> next letter. */
 
-import { flattenRounded, DECIMALS } from "../tutor/landmarks.js";
+import { flattenRounded, DECIMALS, toPoints } from "../tutor/landmarks.js";
+import { shapeDistance } from "../tutor/commit.js";
 import { loadModel } from "../tutor/verifier.js";
 import { loadOpenFS } from "../tutor/openfs.js";
 import { LETTERS, pictureUrl } from "../tutor/letters.js";
@@ -199,6 +200,14 @@ export default {
   postQuestions: [],
   showInstructions: true,
   positionText: () => `Hold up your ${HAND} hand in front of the camera. When we can see it clearly, the button below will turn on.`,
+  /* After the camera check, the hand that passed goes down (or changes shape) before going on, with the phone version's
+   * words (JT liked them, 23 Oct): gone for 300 ms or moved by more than the engine's heldOverShape, at most 4 s. */
+  lowerHand: {
+    text: "Great! Now lower your hand to begin.",
+    goneMs: 300,
+    maxMs: 4000,
+    changed: (a, b, aspect) => shapeDistance(toPoints(flattenRounded(a, DECIMALS), aspect), toPoints(flattenRounded(b, DECIMALS), aspect)) > TUTOR_COMMIT_OPTS.heldOverShape,
+  },
   instructions: () => `
     <p><strong>Fingerspell each letter with your ${HAND} hand.</strong> ${LOOK_STYLE === "glove"
       ? "A glove for the letter sits in the camera view, sized to your hand: put your hand into the glove, turned and shaped to fit. The letter's picture is on the right."

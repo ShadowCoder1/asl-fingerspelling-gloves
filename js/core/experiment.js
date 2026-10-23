@@ -313,7 +313,8 @@ async function run(exp) {
     const positionText = exp.positionText?.({ demographics });
     if (positionText) ui.setText("#position-text", positionText);
     if (SPACE) ui.setText("#btn-position-done", SPACE_LABEL);
-    await positioningLoop(video, tracker, ctx, canvas, stage, (res) => handIndex(exp, res, videoInfo, demographics), handObjection);
+    await positioningLoop(video, tracker, ctx, canvas, stage, (res) => handIndex(exp, res, videoInfo, demographics), handObjection,
+      exp.lowerHand ? { ...exp.lowerHand, aspect: videoInfo.aspect } : null);
   }
 
   /* ---- 5. Instructions -------------------------------------------------- */
@@ -805,7 +806,7 @@ async function collectConsent(statements) {
  * The positioning preview: run the tracker live until the participant has been
  * visible for a couple of continuous seconds, then let them continue.
  * ---------------------------------------------------------------------- */
-async function positioningLoop(video, tracker, ctx, canvas, stage, pick = () => 0, problem = () => null) {
+async function positioningLoop(video, tracker, ctx, canvas, stage, pick = () => 0, problem = () => null, lower = null) {
   ui.$("#position-stage-slot").append(stage);
 
   let stop = false;
@@ -815,6 +816,7 @@ async function positioningLoop(video, tracker, ctx, canvas, stage, pick = () => 
   ui.waitForContinue("#btn-position-done", { space: SPACE }).then(() => { stop = true; });
 
   let lastVideoTime = -1;
+  let lastSeen = null;
   while (!stop) {
     if (video.currentTime !== lastVideoTime) {
       lastVideoTime = video.currentTime;
@@ -826,6 +828,7 @@ async function positioningLoop(video, tracker, ctx, canvas, stage, pick = () => 
       // does not count as seen, and the status line says why.
       const objection = k >= 0 ? problem(res, k) : null;
       const seen = k >= 0 && !objection;
+      if (seen) lastSeen = res.landmarks[k];
       if (seen && visibleSince === null) visibleSince = performance.now();
       if (!seen) visibleSince = null;
 
@@ -842,6 +845,35 @@ async function positioningLoop(video, tracker, ctx, canvas, stage, pick = () => 
       }
     }
     await nextFrame();
+  }
+
+  // An experiment can ask for the hand that passed to go down first
+  // (exp.lowerHand; the ASL demo, as its phone version does): the hand held up
+  // for the check is gone for lower.goneMs or has changed shape
+  // (lower.changed), at most lower.maxMs.
+  if (lower && lastSeen) {
+    btn.disabled = true;
+    ui.setText("#position-status", lower.text);
+    ui.$("#position-status").className = "status good";
+    const t0 = performance.now();
+    let goneAt = null;
+    while (performance.now() - t0 < lower.maxMs) {
+      if (video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        const res = tracker.track(video, performance.now());
+        const k = pick(res);
+        const lm = k >= 0 ? res.landmarks[k] : null;
+        drawLandmarks(ctx, canvas, lm);
+        if (!lm) {
+          goneAt ??= performance.now();
+          if (performance.now() - goneAt >= lower.goneMs) break;
+        } else {
+          goneAt = null;
+          if (lower.changed(lastSeen, lm, lower.aspect)) break;
+        }
+      }
+      await nextFrame();
+    }
   }
   // Move the camera view into the trial screen for the rest of the study.
   ui.$("#trial-stage-slot").append(stage);
